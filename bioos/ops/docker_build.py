@@ -41,6 +41,8 @@ def build_docker_image_request(
 
 def check_build_status_request(task_id: str) -> Dict[str, object]:
     response = requests.get(f"{DEFAULT_BUILD_BASE_URL}/build/status/{task_id}", timeout=60)
-    response.raise_for_status()
-    return response.json()
-
+    try:
+        return response.json()
+    except ValueError as exc:
+        response.raise_for_status()
+        raise exc
