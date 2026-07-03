@@ -61,11 +61,18 @@ class TestCliHandlers(unittest.TestCase):
 
     def test_list_workflows_from_workspace_handle(self):
         args = SimpleNamespace(workspace_name="ws", search_keyword="rna", page_number=2, page_size=5)
+        workflow = {"ID": "wf1", "Status": {"Phase": "Succeeded"}}
         with patch("bioos.cli.list_workflows_from_workspace.workspace_context_from_args", return_value=("wid", object())), \
-                patch("bioos.service.api.list_workflows", return_value=[{"ID": "wf1"}]) as mocked:
+                patch("bioos.service.api.list_workflows", return_value=[workflow]) as mocked:
             result = list_workflows_from_workspace.handle(args)
         mocked.assert_called_once_with(workspace_id="wid", search_keyword="rna", page_number=2, page_size=5)
-        self.assertEqual(result, [{"ID": "wf1"}])
+        self.assertEqual(result, [{
+            "ID": "wf1",
+            "Status": {"Phase": "Succeeded"},
+            "ImportStatus": {"Phase": "Succeeded"},
+            "ReadyToUse": True,
+        }])
+        self.assertNotIn("ImportStatus", workflow)
 
     def test_list_submissions_from_workspace_handle(self):
         args = SimpleNamespace(

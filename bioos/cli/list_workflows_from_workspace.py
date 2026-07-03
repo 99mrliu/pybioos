@@ -17,12 +17,27 @@ def handle(args):
     from bioos.service.api import list_workflows
 
     workspace_id, _ = workspace_context_from_args(args)
-    return list_workflows(
+    workflows = list_workflows(
         workspace_id=workspace_id,
         search_keyword=args.search_keyword,
         page_number=args.page_number,
         page_size=args.page_size,
     ) or []
+    return [_with_workflow_readiness(item) for item in workflows]
+
+
+def _with_workflow_readiness(item):
+    workflow = dict(item)
+    status = workflow.get("Status") or {}
+    if isinstance(status, dict):
+        import_status = dict(status)
+        phase = import_status.get("Phase")
+    else:
+        import_status = {"Phase": status}
+        phase = status
+    workflow["ImportStatus"] = import_status
+    workflow["ReadyToUse"] = phase == "Succeeded"
+    return workflow
 
 
 def main():

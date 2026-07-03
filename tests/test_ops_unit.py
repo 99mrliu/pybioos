@@ -53,6 +53,17 @@ class TestOpsHelpers(unittest.TestCase):
             result = docker_build.check_build_status_request("task-1")
         self.assertEqual(result, {"Status": "Running"})
 
+    def test_check_build_status_request_returns_server_json_for_missing_task(self):
+        with patch("bioos.ops.docker_build.requests.get") as get_mock:
+            get_mock.return_value = MagicMock(
+                status_code=404,
+                raise_for_status=MagicMock(),
+                json=MagicMock(return_value={"message": "Task not found", "Notice": ""}),
+            )
+            result = docker_build.check_build_status_request("missing-task")
+        self.assertEqual(result, {"message": "Task not found", "Notice": ""})
+        get_mock.return_value.raise_for_status.assert_not_called()
+
     def test_workflow_import_rejects_git_url_by_default(self):
         workflows = WorkflowResource("workspace-id")
 
