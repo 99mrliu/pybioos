@@ -202,6 +202,11 @@ class BioOsService(Service):
                 'Action': 'DeleteWorkflow',
                 'Version': '2021-03-04'
             }, {}, {}),
+            'GetWorkflowFilesDownloadInfo':
+            ApiInfo('POST', '/', {
+                'Action': 'GetWorkflowFilesDownloadInfo',
+                'Version': '2021-03-04'
+            }, {}, {}),
             'BindClusterToWorkspace':
             ApiInfo('POST', '/', {
                 'Action': 'BindClusterToWorkspace',
@@ -370,6 +375,9 @@ class BioOsService(Service):
 
     def delete_workflow(self, params):
         return self.__request("DeleteWorkflow", params)
+
+    def get_workflow_files_download_info(self, params):
+        return self.__request("GetWorkflowFilesDownloadInfo", params)
 
     def bind_cluster_to_workspace(self, params):
         return self.__request("BindClusterToWorkspace", params)

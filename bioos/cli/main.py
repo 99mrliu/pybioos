@@ -14,6 +14,7 @@ from bioos.cli import (
     delete_workspace_members,
     delete_submission,
     download_files_from_workspace,
+    download_workflow_wdl,
     export_bioos_workspace,
     fetch_wdl_from_dockstore,
     generate_inputs_json_template_bioos,
@@ -376,6 +377,31 @@ def _add_workflow_group(subparsers: Any) -> None:
     add_argument(import_status_parser, "workflow_id", required=True, help="Workflow ID.")
     import_status_parser.set_defaults(_parser=import_status_parser, output="text")
     import_status_parser.set_defaults(handler=bw_import_status_check.handle)
+
+    download_wdl_parser = workflow_subparsers.add_parser(
+        "download-wdl",
+        help="Download workflow WDL source files.",
+    )
+    add_auth_arguments(download_wdl_parser)
+    add_output_arguments(download_wdl_parser)
+    add_argument(download_wdl_parser, "workspace_name", required=True, help="Workspace name.")
+    add_argument(download_wdl_parser, "workflow", required=True, help="Workflow name or workflow ID.")
+    add_argument(download_wdl_parser, "target", required=True, help="Local directory to save downloaded WDL files.")
+    add_bool_argument(
+        download_wdl_parser,
+        "include_imports",
+        default=True,
+        help_text="Download imported WDL files recursively.",
+        negative_help_text="Only download the main workflow WDL.",
+    )
+    add_bool_argument(
+        download_wdl_parser,
+        "allow_non_succeeded",
+        default=False,
+        help_text="Try to download even when workflow validation status is not Succeeded.",
+    )
+    download_wdl_parser.set_defaults(_parser=download_wdl_parser)
+    download_wdl_parser.set_defaults(handler=download_workflow_wdl.handle)
 
     run_status_parser = workflow_subparsers.add_parser("run-status", help="Check workflow run status.")
     add_auth_arguments(run_status_parser)

@@ -17,6 +17,7 @@ from bioos.cli import (
     delete_workspace_members,
     delete_submission,
     download_files_from_workspace,
+    download_workflow_wdl,
     export_bioos_workspace,
     fetch_wdl_from_dockstore,
     generate_inputs_json_template_bioos,
@@ -222,6 +223,66 @@ class TestCliHandlers(unittest.TestCase):
             result = download_files_from_workspace.handle(args)
         ws.files.download.assert_called_once_with(sources=["a.txt", "b.txt"], target="/tmp/out", flatten=True)
         self.assertTrue(result["success"])
+
+    def test_download_workflow_wdl_handle_downloads_main_and_imports(self):
+        service = MagicMock()
+        service.list_workspaces.return_value = {
+            "Items": [{"ID": "wid", "Name": "ws"}]
+        }
+        service.list_workflows.return_value = {
+            "Items": [
+                {
+                    "ID": "wf-id",
+                    "Name": "wf-name",
+                    "MainWorkflowPath": "workflows/main.wdl",
+                    "Status": {"Phase": "Succeeded"},
+                }
+            ]
+        }
+        service.get_workflow_files_download_info.side_effect = lambda params: {
+            "PreSignedURL": f"https://download.example/{params['FilePath']}"
+        }
+
+        contents = {
+            "workflows/main.wdl": 'version 1.0\nimport "../tasks/echo.wdl" as echo_tasks\nworkflow wf {}\n',
+            "tasks/echo.wdl": "version 1.0\ntask echo_name { command <<< echo hi >>> }\n",
+        }
+
+        def fake_urlretrieve(url, target):
+            prefix = "https://download.example/"
+            file_path = url[len(prefix):]
+            Path(target).write_text(contents[file_path], encoding="utf-8")
+            return str(target), None
+
+        with tempfile.TemporaryDirectory() as tmpdir, \
+                patch("bioos.cli.download_workflow_wdl._build_service", return_value=service) as build_service_mock, \
+                patch("bioos.bioos.login") as login_mock, \
+                patch("bioos.config.Config.service") as config_service_mock, \
+                patch("bioos.cli.download_workflow_wdl.urllib.request.urlretrieve", side_effect=fake_urlretrieve):
+            args = SimpleNamespace(
+                workspace_name="ws",
+                workflow="wf-name",
+                target=tmpdir,
+                include_imports=True,
+                allow_non_succeeded=False,
+            )
+            result = download_workflow_wdl.handle(args)
+            target_dir = Path(tmpdir)
+            self.assertTrue((target_dir / "workflows" / "main.wdl").is_file())
+            self.assertTrue((target_dir / "tasks" / "echo.wdl").is_file())
+
+        build_service_mock.assert_called_once_with(args)
+        login_mock.assert_not_called()
+        config_service_mock.assert_not_called()
+        self.assertEqual(result["workflow_id"], "wf-id")
+        self.assertEqual(result["workspace_id"], "wid")
+        self.assertEqual(result["main_workflow_path"], "workflows/main.wdl")
+        self.assertEqual(result["downloaded_count"], 2)
+        requested_paths = [
+            call.args[0]["FilePath"]
+            for call in service.get_workflow_files_download_info.call_args_list
+        ]
+        self.assertEqual(requested_paths, ["workflows/main.wdl", "tasks/echo.wdl"])
 
     def test_upload_files_to_workspace_handle(self):
         args = SimpleNamespace(
@@ -879,6 +940,26 @@ class TestCliRootAndAuth(unittest.TestCase):
         with patch("bioos.bw_import_status_check.handle", return_value="Status: Succeeded") as mocked:
             exit_code = cli_main.main(
                 ["workflow", "import-status", "--workspace-name", "ws", "--workflow-id", "wfid"]
+            )
+
+        self.assertEqual(exit_code, 0)
+        mocked.assert_called_once()
+
+    def test_root_workflow_download_wdl_dispatches_to_handler(self):
+        with patch("bioos.cli.download_workflow_wdl.handle", return_value={"success": True}) as mocked:
+            exit_code = cli_main.main(
+                [
+                    "workflow",
+                    "download-wdl",
+                    "--workspace-name",
+                    "ws",
+                    "--workflow",
+                    "wf",
+                    "--target",
+                    "/tmp/wdl",
+                    "--output",
+                    "json",
+                ]
             )
 
         self.assertEqual(exit_code, 0)

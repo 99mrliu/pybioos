@@ -481,6 +481,13 @@ class WorkflowResource(metaclass=SingletonType):
         })
         return f"WorkflowsInfo:\n{info_dict}\n{self.list()}"
 
+    @staticmethod
+    def _normalize_required_string(value: str, name: str) -> str:
+        normalized = str(value).strip() if value is not None else ""
+        if not normalized:
+            raise ParameterError(name)
+        return normalized
+
     @property
     def get_cluster(self) -> str:  # 查看在运行的机器？
         """Gets the bound cluster id supporting running workflow
@@ -746,6 +753,30 @@ class WorkflowResource(metaclass=SingletonType):
             return Config.service().update_workflow(params)
 
         raise ParameterError("source", f"Workflow source '{source}' does not exist.")
+
+    def get_workflow_files_download_info(self,
+                                         workflow_id: str,
+                                         file_path: str,
+                                         top: Optional[dict] = None) -> dict:
+        """Gets download information for a workflow file.
+
+        :param workflow_id: Workflow ID
+        :type workflow_id: str
+        :param file_path: Workflow file path
+        :type file_path: str
+        :param top: Optional top-level request metadata
+        :type top: dict
+        :return: Download information, including ``PreSignedURL``
+        :rtype: dict
+        """
+        params = {
+            "WorkspaceID": self._normalize_required_string(self.workspace_id, "workspace_id"),
+            "ID": self._normalize_required_string(workflow_id, "workflow_id"),
+            "FilePath": self._normalize_required_string(file_path, "file_path"),
+        }
+        if top is not None:
+            params["Top"] = top
+        return Config.service().get_workflow_files_download_info(params)
 
     def list(self) -> DataFrame:
         """Lists all workflows' information .
@@ -1045,6 +1076,16 @@ class Workflow(metaclass=SingletonType):
             "main_workflow_path": self.main_workflow_path,
             "source_type": self.source_type,
         }
+
+    def get_file_download_info(self,
+                               file_path: str,
+                               top: Optional[dict] = None) -> dict:
+        """Gets download information for a file in this workflow."""
+        return WorkflowResource(self.workspace_id).get_workflow_files_download_info(
+            workflow_id=self.id,
+            file_path=file_path,
+            top=top,
+        )
 
     @staticmethod
     def _fmt_default(raw: Any) -> Optional[str]:

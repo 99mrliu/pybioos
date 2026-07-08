@@ -176,6 +176,28 @@ class TestOpsHelpers(unittest.TestCase):
 
         service_mock.return_value.update_workflow.assert_not_called()
 
+    def test_workflow_get_file_download_info_builds_request(self):
+        workflows = WorkflowResource(" workspace-id ")
+        response = {"PreSignedURL": "https://example.com/workflow.wdl"}
+
+        with patch("bioos.resource.workflows.Config.service") as service_mock:
+            service_mock.return_value.get_workflow_files_download_info.return_value = response
+            result = workflows.get_workflow_files_download_info(
+                workflow_id=" wf-id ",
+                file_path=" workflow/main.wdl ",
+                top={"RequestId": "req-1"},
+            )
+
+        self.assertEqual(result, response)
+        service_mock.return_value.get_workflow_files_download_info.assert_called_once_with(
+            {
+                "WorkspaceID": "workspace-id",
+                "ID": "wf-id",
+                "FilePath": "workflow/main.wdl",
+                "Top": {"RequestId": "req-1"},
+            }
+        )
+
     def test_parse_workflow_url(self):
         org, workflow = dockstore.parse_workflow_url(
             "https://dockstore.miracle.ac.cn/workflows/git.miracle.ac.cn/gzlab/mrnaseq/mRNAseq"
@@ -1168,6 +1190,18 @@ class TestOpsHelpers(unittest.TestCase):
 
         self.assertEqual(result, {})
         request_mock.assert_called_once_with("UpdateWorkflow", params)
+
+    def test_bioos_service_registers_get_workflow_files_download_info(self):
+        service = BioOsService.__new__(BioOsService)
+        params = {"WorkspaceID": "wid", "ID": "wf-id", "FilePath": "main.wdl"}
+        response = {"PreSignedURL": "https://example.com/main.wdl"}
+
+        self.assertIn("GetWorkflowFilesDownloadInfo", BioOsService.get_api_info())
+        with patch.object(BioOsService, "_BioOsService__request", return_value=response) as request_mock:
+            result = service.get_workflow_files_download_info(params)
+
+        self.assertEqual(result, response)
+        request_mock.assert_called_once_with("GetWorkflowFilesDownloadInfo", params)
 
     def test_run_list_runs_builds_request(self):
         response = {"Items": []}
